@@ -1,7 +1,7 @@
 import pickle
 
 from modelscan.models import Severity
-from modelscan.static.pickle import lambdas, pickle_vm
+from modelscan.static import lambdas, pickle_vm
 
 
 class _Compile:

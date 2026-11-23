@@ -1,6 +1,6 @@
 import pickle
 
-from modelscan.static.pickle import pickle_vm
+from modelscan.static import pickle_vm
 
 
 class _Evil:

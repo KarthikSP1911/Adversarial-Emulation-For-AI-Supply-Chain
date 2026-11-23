@@ -5,8 +5,8 @@ from collections import OrderedDict
 import pytest
 
 from modelscan.models import Severity
-from modelscan.static.pickle import globals_policy as gp
-from modelscan.static.pickle import pickle_vm
+from modelscan.static import globals_policy as gp
+from modelscan.static import pickle_vm
 
 
 class _Sys:

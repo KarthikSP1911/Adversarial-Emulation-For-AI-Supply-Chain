@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from modelscan.models import Finding, InspectorResult, Status
-from modelscan.static import pickle as pickle_engine
+from modelscan.static import pickle_scan as pickle_engine
 
 
 def scan(files: list[Path]) -> InspectorResult:

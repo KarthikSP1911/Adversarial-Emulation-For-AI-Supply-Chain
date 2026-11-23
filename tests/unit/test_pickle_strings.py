@@ -1,7 +1,7 @@
 import pickle
 
 from modelscan.models import Severity
-from modelscan.static.pickle import pickle_vm, strings
+from modelscan.static import pickle_vm, strings
 
 
 class _Shell:
