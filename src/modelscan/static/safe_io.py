@@ -32,7 +32,8 @@ class Deadline:
         self.end = time.monotonic() + seconds
 
     def check(self) -> None:
-        if time.monotonic() > self.end:
+        # >= so a zero deadline is expired even on coarse clocks (Windows ~15 ms)
+        if time.monotonic() >= self.end:
             raise ScanLimitError(f"scan exceeded {self.seconds:g}s time limit")
 
 

@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from static_fixtures import symlink_or_skip
 
 from modelscan.static import safe_io
 
@@ -15,7 +16,7 @@ def test_regular_file_ok(tmp_path):
 def test_symlink_not_followed(tmp_path):
     (tmp_path / "real").write_bytes(b"x")
     link = tmp_path / "model.bin"
-    link.symlink_to("/etc/passwd")
+    symlink_or_skip(link, "/etc/passwd")
     pc = safe_io.inspect_path(link, tmp_path)
     assert not pc.ok and pc.problem == "symlink"
     with pytest.raises(OSError):

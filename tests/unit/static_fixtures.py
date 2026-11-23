@@ -33,6 +33,16 @@ def safetensors_bytes(
     return struct.pack("<Q", len(raw)) + raw + b"\x00" * offset + trailing
 
 
+def symlink_or_skip(link: Path, target: str) -> None:
+    """Windows needs admin rights or Developer Mode to create symlinks."""
+    import pytest
+
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"cannot create symlinks here: {exc}")
+
+
 def write(path: Path, data: bytes) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)

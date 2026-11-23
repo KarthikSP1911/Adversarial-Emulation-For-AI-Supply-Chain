@@ -3,7 +3,14 @@
 import os
 import zipfile
 
-from static_fixtures import BENIGN_PICKLE, evil_pickle, safetensors_bytes, torch_zip, write
+from static_fixtures import (
+    BENIGN_PICKLE,
+    evil_pickle,
+    safetensors_bytes,
+    symlink_or_skip,
+    torch_zip,
+    write,
+)
 
 from modelscan.models import Severity, Status
 from modelscan.static import scan
@@ -57,7 +64,7 @@ def test_benign_torch_zip_is_clean(tmp_path):
 
 def test_symlink_reported_not_followed(tmp_path):
     write(tmp_path / "model.safetensors", safetensors_bytes())
-    (tmp_path / "evil.bin").symlink_to("/etc/passwd")
+    symlink_or_skip(tmp_path / "evil.bin", "/etc/passwd")
     result = scan(_files(tmp_path))
     (f,) = [f for f in result.findings if f.rule_id == "IO-001"]
     assert f.file == "evil.bin"
