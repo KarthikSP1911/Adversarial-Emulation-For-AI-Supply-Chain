@@ -12,6 +12,9 @@ Rule ID prefixes owned by this layer:
 * ``SFT-`` safetensors structure
 * ``ARC-`` zip / tar archive content
 * ``INT-`` integrity (hashes, manifests, CRC, sharded index consistency)
+
+The format scanners own ``FMT-``, ``templates`` owns ``TPL-`` and ``remote_code``
+owns ``RCS-``.
 """
 
 from __future__ import annotations

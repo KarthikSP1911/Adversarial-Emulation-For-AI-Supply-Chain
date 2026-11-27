@@ -1,7 +1,8 @@
 """Static scan manager: runs every checker on every file and combines results.
 
-Order per file: path safety -> format detection -> fingerprint -> format and
-archive checkers -> pickle engine. Then folder-level integrity checks.
+Order per file: path safety -> format detection -> fingerprint -> safetensors and
+archive checkers -> pickle engine -> format, chat-template and shipped-code
+scanners. Then folder-level integrity checks.
 
 Fail closed: a checker that crashes, a file that can't be opened safely, or a
 format nobody inspects is reported. It never silently counts as clean.
@@ -16,7 +17,7 @@ from pathlib import Path
 
 from modelscan.models import Finding, Severity, Status
 
-from . import archive, detect, integrity, safe_io
+from . import archive, detect, integrity, remote_code, safe_io, templates
 from . import pickle_scan as pickle_engine
 from .base import (
     ATLAS_UNSAFE_ARTIFACT,
@@ -26,11 +27,11 @@ from .base import (
     StaticResult,
     make_finding,
 )
-from .formats import safetensors
+from .formats import gguf, keras, numpy, onnx, safetensors, torch
 
 INSPECTOR = "static"
 
-# Recognised formats that no checker covers yet, and how much that matters.
+# Recognised formats that may go uninspected, and how much that matters.
 NOT_YET_INSPECTED: dict[Kind, Severity] = {
     Kind.NUMPY: Severity.MEDIUM,  # object arrays are pickles
     Kind.HDF5: Severity.MEDIUM,  # Keras Lambda layers carry code
@@ -38,6 +39,28 @@ NOT_YET_INSPECTED: dict[Kind, Severity] = {
     Kind.ONNX: Severity.LOW,
     Kind.GZIP: Severity.LOW,
 }
+
+# Scanners that take a path and choose files by name: (name, applies, scan).
+_PATH_SCANNERS: tuple[
+    tuple[str, Callable[[Artifact], bool], Callable[[Path], list[Finding]]], ...
+] = (
+    (
+        "torch",
+        lambda a: a.path.suffix.lower() in torch.TORCH_SUFFIXES
+        and a.kind in (Kind.ZIP, Kind.TORCH_ZIP),
+        torch.scan,
+    ),
+    ("keras", lambda a: a.path.suffix.lower() in keras.KERAS_SUFFIXES, keras.scan),
+    ("onnx", lambda a: a.path.suffix.lower() in onnx.ONNX_SUFFIXES, onnx.scan),
+    ("gguf", lambda a: a.path.suffix.lower() in gguf.GGUF_SUFFIXES, gguf.scan),
+    ("numpy", lambda a: a.path.suffix.lower() in numpy.NUMPY_SUFFIXES, numpy.scan),
+    ("templates", lambda a: templates._is_template_file(a.path), templates.scan),
+    ("remote_code", lambda a: remote_code._is_python_file(a.path), remote_code.scan),
+)
+
+# The scanner that reads each kind's content. HDF5 and gzip have none: the
+# keras scanner reads only the magic bytes of an HDF5 file.
+_KIND_SCANNER = {Kind.NUMPY: "numpy", Kind.GGUF: "gguf", Kind.ONNX: "onnx"}
 
 _PATH_PROBLEMS = {
     "symlink": "Symlink not followed",
@@ -139,10 +162,18 @@ def _scan_one(art: Artifact) -> tuple[list[str], list[Finding], list[str]]:
         step("archive", lambda: archive.check(art))
     if art.kind in (Kind.PICKLE, Kind.TORCH_ZIP, Kind.ZIP):
         step("pickle", lambda: _pickle(art))
-    elif art.kind in NOT_YET_INSPECTED:
+
+    selected: set[str] = set()
+    for name, applies, run in _PATH_SCANNERS:
+        if applies(art):
+            selected.add(name)
+            step(name, lambda run=run: [_relabel(f, art) for f in run(art.path)])
+
+    # Scanners pick files by name, so content under another name is still uninspected.
+    if art.kind in NOT_YET_INSPECTED and _KIND_SCANNER.get(art.kind) not in selected:
         findings.append(make_finding(
             "DET-004", NOT_YET_INSPECTED[art.kind], art,
-            f"{art.kind.value} file recognised but no checker inspects it yet",
+            f"{art.kind.value} file recognised but no checker inspected its content",
             checker="detect", detected=art.kind.value,
         ))  # fmt: skip
     return ran, findings, errors
@@ -194,7 +225,7 @@ def _pickle(art: Artifact) -> list[Finding]:
 
 
 def _relabel(f: Finding, art: Artifact) -> Finding:
-    """The pickle engine names files by full path; use the scan-relative name."""
+    """Some scanners name files by full path; use the scan-relative name."""
     full = str(art.path)
     if f.file == full or f.file.startswith(full + "!"):
         return f.model_copy(update={"file": art.rel + f.file[len(full) :]})
